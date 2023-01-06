@@ -163,14 +163,27 @@ module Pod
             pod_node = add_node(current_graph, pod)
             next if pod_node.nil?
             dependencies.each do |dependency|
-              dep_node = add_node(current_graph, dependency)
-              next if dep_node.nil?
-              current_graph.add_edge(pod_node, dep_node)
+              if is_subspec_of(pod, dependency)
+                dep_node = add_node(current_graph, dependency)
+                next if dep_node.nil?
+                current_graph.add_edge(pod_node, dep_node)
+              else
+                dep_node = add_node(graph, dependency)
+                next if dep_node.nil?
+                graph.add_edge(pod_node, dep_node)
+              end
             end
           end
 
           graph
         end
+      end
+
+      def is_subspec_of(pod, dependency)
+        sanitized_p = sanitized_pod_name(pod)
+        pod_name = sanitized_p["/"] ? sanitized_p.split("/")[0] : sanitized_p
+        sanitized_d = sanitized_pod_name(dependency)
+        return sanitized_d.start_with?(pod_name + '/')
       end
 
       def add_node(graph, pod)
@@ -181,21 +194,22 @@ module Pod
       # if there are subspecs in the pod, creates subgraph, otherwise return root graph
       def get_pod_graph(graph, pod, dependencies)
         sanitized_p = sanitized_pod_name(pod)
+        pod_name = sanitized_p["/"] ? sanitized_p.split("/")[0] : sanitized_p
+
         create_subgraph = false
         dependencies.each do |dependency|
-          sanitized_d = sanitized_pod_name(dependency)
-          if sanitized_d.start_with?(sanitized_p + '/')
+          if is_subspec_of(pod, dependency)
             create_subgraph = true
             break
           end
         end
 
         if create_subgraph
-          cluster_name = "cluster_" + sanitized_p
+          cluster_name = "cluster_" + pod_name
           subgraph = graph.get_graph(cluster_name)
   
           if subgraph == nil 
-            subgraph = graph.add_graph(cluster_name, "style" => "filled", "color" => "darkolivegreen1")
+            subgraph = graph.add_graph(cluster_name, "style" => "filled", "color" => "khaki1")
           end
           return subgraph  
         else
