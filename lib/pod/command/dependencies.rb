@@ -18,6 +18,7 @@ module Pod
           ['--use-podfile-targets', 'Uses targets from the Podfile'],
           ['--ranksep', 'If you use --image command this command will be useful. The gives desired rank separation, in inches. Example --ranksep=.75, default .75'],
           ['--nodesep', 'It is same as [--ranksep] command. Minimum space between two adjacent nodes in the same rank, in inches.Example --nodesep=.25, default .25'],
+          ['--splines', 'straight lines: https://graphviz.readthedocs.io/en/stable/manual.html#styling'],
           ['--filter-pattern', 'Filters out subtrees from pods with names matching the specified pattern from the --graphviz and --image output. Example --filter-pattern="Tests"'],
         ].concat(super)
       end
@@ -37,6 +38,7 @@ module Pod
         @use_podfile_targets = argv.flag?('use-podfile-targets', false)
         @ranksep = argv.option('ranksep', '0.75')
         @nodesep = argv.option('nodesep', '0.25')
+        @splines = argv.option('splines', 'ortho')
         @filter_pattern = argv.option('filter-pattern', nil)
         super
       end
@@ -129,7 +131,7 @@ module Pod
       def graphviz_data
         @graphviz ||= begin
           require 'graphviz'
-          graph = GraphViz::new(output_file_basename, :type => :digraph, :ranksep => @ranksep, :nodesep => @nodesep)
+          graph = GraphViz::new(output_file_basename, :type => :digraph, :ranksep => @ranksep, :nodesep => @nodesep, :splines => @splines)
 
           if @use_podfile_targets
             unless @podspec
@@ -157,12 +159,13 @@ module Pod
           end
 
           pod_to_dependencies.each do |pod, dependencies|
-            pod_node = add_node(graph, pod)
+            current_graph = get_pod_graph(graph, pod, dependencies)
+            pod_node = add_node(current_graph, pod)
             next if pod_node.nil?
             dependencies.each do |dependency|
-              dep_node = add_node(graph, dependency)
+              dep_node = add_node(current_graph, dependency)
               next if dep_node.nil?
-              graph.add_edge(pod_node, dep_node)
+              current_graph.add_edge(pod_node, dep_node)
             end
           end
 
@@ -173,6 +176,32 @@ module Pod
       def add_node(graph, pod)
         return nil if filter? pod
         graph.add_node(sanitized_pod_name(pod))
+      end
+
+      # if there are subspecs in the pod, creates subgraph, otherwise return root graph
+      def get_pod_graph(graph, pod, dependencies)
+        sanitized_p = sanitized_pod_name(pod)
+        create_subgraph = false
+        dependencies.each do |dependency|
+          sanitized_d = sanitized_pod_name(dependency)
+          if sanitized_d.start_with?(sanitized_p + '/')
+            create_subgraph = true
+            break
+          end
+        end
+
+        if create_subgraph
+          cluster_name = "cluster_" + sanitized_p
+          subgraph = graph.get_graph(cluster_name)
+  
+          if subgraph == nil 
+            subgraph = graph.add_graph(cluster_name, "style" => "filled", "color" => "darkolivegreen1")
+          end
+          return subgraph  
+        else
+          return graph
+        end
+
       end
 
       # Truncates the input string after a pod's name removing version requirements, etc.
@@ -213,7 +242,7 @@ module Pod
       end
 
       def graphviz_dot_output
-        graphviz_data.output( :conan => "#{output_file_basename}.gv")
+        graphviz_data.output( :canon => "#{output_file_basename}.gv")
       end
 
     end
