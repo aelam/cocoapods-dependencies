@@ -188,7 +188,7 @@ module Pod
 
       def add_node(graph, pod)
         return nil if filter? pod
-        graph.add_node(sanitized_pod_name(pod))
+        graph.add_node(sanitized_pod_name(pod), "shape" => "box")
       end
 
       # if there are subspecs in the pod, creates subgraph, otherwise return root graph
